@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<meta charset="UTF-8" />
+  <meta name="color-scheme" content="dark light" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='14' fill='%2306121a'/%3E%3Cg fill='%2352d6c1'%3E%3Crect x='10' y='21' width='4' height='6' rx='2'/%3E%3Crect x='17' y='14' width='4' height='20' rx='2'/%3E%3Crect x='24' y='9' width='4' height='30' rx='2' fill='%23f5a524'/%3E%3Crect x='31' y='16' width='4' height='16' rx='2'/%3E%3Crect x='38' y='22' width='3' height='4' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
+  <script src="js/teaser-shim.js?v=18"></script>
+  <title>Soundscape Sentinel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+  <!-- Pestaña "Paisaje 3D": Three.js como módulo ES por CDN (sin build). Solo se descarga al abrir esa pestaña. -->
+  <!-- Cada módulo local lleva ?v=N para saltarse la caché del navegador: sube N al cambiar cualquier archivo de js/ o css/. -->
+  <script type="importmap">{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "./js/paisaje3d/main.js": "./js/paisaje3d/main.js?v=11", "./js/paisaje3d/panel.js": "./js/paisaje3d/panel.js?v=11", "./js/paisaje3d/scene.js": "./js/paisaje3d/scene.js?v=11",
+    "./js/paisaje3d/spectrogram.js": "./js/paisaje3d/spectrogram.js?v=11", "./js/paisaje3d/forest.js": "./js/paisaje3d/forest.js?v=11", "./js/paisaje3d/sources.js": "./js/paisaje3d/sources.js?v=11",
+    "./js/paisaje3d/demo.js": "./js/paisaje3d/demo.js?v=11", "./js/paisaje3d/util.js": "./js/paisaje3d/util.js?v=11", "./js/paisaje3d/calls.js": "./js/paisaje3d/calls.js?v=11", "./js/estratos.js": "./js/estratos.js?v=11" } }</script>
+  <link rel="stylesheet" href="css/paisaje3d.css?v=11" />
+  <style>
+    /* ═════════ Tokens ═════════
+       Identidad: "coro del amanecer" — noche de bosque (teal-tinta) + biofonía bioluminiscente + ámbar de alba.
+       Escala de espaciado 4/8, radios y elevaciones fijas, z-index por capas. */
+    :root {
+      --font: "Exo", "Segoe UI", system-ui, sans-serif;
+      --mono: "Roboto Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+      --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+      --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-pill: 999px;
+      --z-base: 0; --z-sticky: 20; --z-overlay: 40;
+      --ease: cubic-bezier(.2, .7, .2, 1); --t-fast: 150ms; --t-med: 250ms;
+    }
+    :root, :root[data-theme="dark"] {
+      --bg: #06121a; --bg-grad-1: rgba(82, 214, 193, .09); --bg-grad-2: rgba(245, 165, 36, .06);
+      --surface: #0d222d; --surface-2: #132f3d; --surface-3: #183a4a;
+      --border: rgba(160, 205, 220, .13); --border-strong: rgba(160, 205, 220, .26);
+      --text: #e7f3f6; --text-2: #a5bfc9; --text-3: #82a0ac;
+      --accent: #52d6c1; --accent-ink: #04251f; --accent-soft: rgba(82, 214, 193, .14);
+      --amber: #f5a524; --amber-soft: rgba(245, 165, 36, .15);
+      --sky: #6cc3e0; --violet: #b39dfa; --coral: #ff7b72;
+      --ok: #4ade80; --ok-soft: rgba(74, 222, 128, .14);
+      --danger: #ff6b6b; --danger-soft: rgba(255, 107, 107, .15);
+      --grid: rgba(160, 205, 220, .09);
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+      --ring: 0 0 0 3px rgba(82, 214, 193, .55);
+      --scrim: rgba(3, 10, 14, .6);
+    }
+    :root[data-theme="light"] {
+      --bg: #edf4f6; --bg-grad-1: rgba(15, 143, 135, .08); --bg-grad-2: rgba(200, 120, 0, .06);
+      --surface: #ffffff; --surface-2: #f3f8fa; --surface-3: #e6eff2;
+      --border: rgba(14, 55, 70, .12); --border-strong: rgba(14, 55, 70, .26);
+      --text: #0c2230; --text-2: #3f5b68; --text-3: #587480;
+      --accent: #0b7f78; --accent-ink: #ffffff; --accent-soft: rgba(11, 127, 120, .12);
+      --amber: #9a5b00; --amber-soft: rgba(154, 91, 0, .12);
+      --sky: #1a7ea0; --violet: #6b4fd1; --coral: #c8473f;
+      --ok: #167a3d; --ok-soft: rgba(22, 122, 61, .12);
+      --danger: #b42318; --danger-soft: rgba(180, 35, 24, .1);
+      --grid: rgba(14, 55, 70, .08);
+      --shadow: 0 1px 2px rgba(10,40,55,.08), 0 6px 20px rgba(10,40,55,.08);
+      --ring: 0 0 0 3px rgba(11, 127, 120, .45);
+      --scrim: rgba(10, 30, 40, .5);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { color-scheme: dark; }
+    html[data-theme="light"] { color-scheme: light; }
+    body {
+      font-family: var(--font); font-size: 16px; line-height: 1.55; color: var(--text);
+      background: radial-gradient(1100px 520px at 12% -8%, var(--bg-grad-1), transparent 60%),
+                  radial-gradient(900px 480px at 100% 0%, var(--bg-grad-2), transparent 55%), var(--bg);
+      background-attachment: fixed; min-height: 100dvh;
+    }
+    .num, .value, .meter-val, td.n, .stat-value { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    svg.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+    :focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-sm); }
+    .skip { position: absolute; left: var(--s4); top: -64px; background: var(--accent); color: var(--accent-ink); padding: var(--s2) var(--s4); border-radius: var(--r-sm); z-index: var(--z-overlay); font-weight: 600; }
+    .skip:focus { top: var(--s3); }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    /* ═════════ Layout ═════════ */
+    .app { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100dvh; }
+    .side {
+      position: sticky; top: 0; align-self: start; height: 100dvh; display: flex; flex-direction: column; gap: var(--s5);
+      padding: var(--s5) var(--s4); border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 70%, transparent);
+      backdrop-filter: blur(10px); z-index: var(--z-sticky);
+    }
+    .brand { display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s2); }
+    .brand-mark { width: 44px; height: 44px; flex: none; }
+    .brand h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: .01em; line-height: 1.15; }
+    .brand p { font-size: .76rem; color: var(--text-3); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+    .tab-nav { display: flex; flex-direction: column; gap: var(--s1); }
+    .tab-btn {
+      display: flex; align-items: center; gap: var(--s3); min-height: 44px; padding: 0 var(--s3); width: 100%;
+      background: none; border: 1px solid transparent; border-radius: var(--r-md); color: var(--text-2);
+      font: 500 .95rem var(--font); cursor: pointer; text-align: left; position: relative;
+      transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    }
+    .tab-btn:hover { background: var(--surface-2); color: var(--text); }
+    .tab-btn[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); font-weight: 600; }
+    .tab-btn[aria-selected="true"]::before { content: ""; position: absolute; left: -17px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--accent); }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); margin-left: auto; }
+    .live-dot.on { background: var(--danger); box-shadow: 0 0 0 0 var(--danger); animation: ping 1.6s infinite; }
+    @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(255,107,107,.6); } 70%,100% { box-shadow: 0 0 0 8px rgba(255,107,107,0); } }
+    .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); }
+    .status-pill { display: flex; align-items: center; gap: var(--s2); border-radius: var(--r-md); padding: var(--s3); font-size: .84rem; font-weight: 500; background: var(--ok-soft); color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); }
+    .status-pill .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: pulse 2.4s infinite; }
+    .status-pill.offline { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+    .status-pill.offline .status-dot { animation: none; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 44px; min-width: 44px; padding: 0 var(--s3); background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); border-radius: var(--r-md); font: 500 .88rem var(--font); cursor: pointer; transition: background var(--t-fast), color var(--t-fast); }
+    .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+    .main { padding: var(--s6) var(--s6) var(--s7); max-width: 1240px; width: 100%; margin: 0 auto; }
+    .topbar { display: none; }
+
+    .side, .main { min-width: 0; }
+    @media (max-width: 1023px) {
+      .app { grid-template-columns: minmax(0, 1fr); }
+      .tab-nav { max-width: 100%; }
+      .side { position: sticky; top: 0; height: auto; flex-direction: column; gap: var(--s3); padding: var(--s3) var(--s4); border-right: 0; border-bottom: 1px solid var(--border); }
+      .brand-mark { width: 36px; height: 36px; } .brand p { display: none; }
+      .tab-nav { flex-direction: row; overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--s1); gap: var(--s2); }
+      .tab-btn { width: auto; white-space: nowrap; border: 1px solid var(--border); }
+      .tab-btn[aria-selected="true"]::before { display: none; }
+      .live-dot { margin-left: var(--s1); }
+      .side-foot { flex-direction: row; align-items: center; margin-top: 0; }
+      .side-foot .status-pill { flex: 1; padding: var(--s2) var(--s3); }
+      .side-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+      .main { padding: var(--s4) var(--s4) var(--s6); }
+    }
+    @media (min-width: 1024px) { .side-head { display: block; } }
+
+    /* ═════════ Componentes ═════════ */
+    .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s5); }
+    .page-head h2 { font-size: 1.6rem; font-weight: 700; letter-spacing: .005em; line-height: 1.2; }
+    .page-head p { color: var(--text-2); font-size: .95rem; margin-top: var(--s1); max-width: 64ch; }
+    .demo-banner { display: none; align-items: center; gap: var(--s3); background: var(--amber-soft); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); color: var(--amber); border-radius: var(--r-md); padding: var(--s3) var(--s4); margin-bottom: var(--s5); font-size: .9rem; font-weight: 500; }
+    .demo-banner.on { display: flex; }
+
+    .tab-panel { display: none; animation: rise var(--t-med) var(--ease); }
+    .tab-panel.active { display: block; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s5); margin-bottom: var(--s5); box-shadow: var(--shadow); }
+    .card h3 { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-3); margin-bottom: var(--s1); display: flex; align-items: center; gap: var(--s2); }
+    .hint { font-size: .88rem; color: var(--text-2); margin-bottom: var(--s4); max-width: 80ch; }
+    .chart-box { position: relative; height: 280px; }
+    .chart-box.short { height: 220px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); }
+    @media (max-width: 960px) { .two-col { grid-template-columns: 1fr; } .chart-box { height: 240px; } }
+
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s4); margin-bottom: var(--s5); }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s4) var(--s5); box-shadow: var(--shadow); position: relative; overflow: hidden; }
+    .stat-card::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, var(--accent), transparent 70%); opacity: .7; }
+    .stat-card .label { font-size: .74rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .12em; font-weight: 600; display: flex; align-items: center; gap: var(--s2); }
+    .stat-card .label svg { width: 16px; height: 16px; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: var(--s2); line-height: 1.1; }
+    .stat-card .value.small { font-size: 1.02rem; font-weight: 500; margin-top: var(--s3); line-height: 1.35; }
+    .stat-card .value.warn { color: var(--danger); }
+    .stat-card .sub { font-size: .8rem; color: var(--text-3); margin-top: var(--s1); }
+    .skeleton .value, .skeleton .sub { color: transparent; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: var(--r-sm); }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: var(--s5); align-items: center; padding: var(--s6); margin-bottom: var(--s5); border-radius: var(--r-lg); border: 1px solid var(--border-strong); position: relative; overflow: hidden;
+      background: radial-gradient(600px 260px at 0% 0%, var(--accent-soft), transparent 70%), radial-gradient(500px 240px at 100% 100%, var(--amber-soft), transparent 70%), var(--surface); box-shadow: var(--shadow); }
+    .hero h2 { font-size: 1.9rem; font-weight: 700; line-height: 1.15; }
+    .hero p { color: var(--text-2); margin-top: var(--s3); max-width: 52ch; }
+    .hero .chips { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s4); }
+    .chip { display: inline-flex; align-items: center; gap: var(--s2); border-radius: var(--r-pill); padding: 4px 12px; font-size: .8rem; font-weight: 500; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+    .gauge { text-align: center; }
+    .gauge svg { width: 100%; max-width: 300px; height: auto; }
+    .gauge .g-num { font: 700 28px var(--mono); fill: var(--text); }
+    .gauge .g-cap { font: 500 11px var(--font); fill: var(--text-3); letter-spacing: .08em; text-transform: uppercase; }
+    .gauge .g-lbl { font: 500 11px var(--font); fill: var(--text-2); }
+    .gauge-note { font-size: .84rem; color: var(--text-2); margin-top: var(--s1); }
+    @media (max-width: 800px) { .hero { grid-template-columns: 1fr; padding: var(--s5); } .hero h2 { font-size: 1.5rem; } }
+
+    .toolbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s4); }
+    .toolbar label { font-size: .85rem; color: var(--text-2); font-weight: 500; }
+    select, input[type=search] { min-height: 44px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0 var(--s4); font: 500 .92rem var(--font); }
+    select:hover, input[type=search]:hover { border-color: var(--accent); }
+    input[type=search]::placeholder { color: var(--text-3); }
+    .btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 var(--s4); border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 600 .9rem var(--font); cursor: pointer; transition: background var(--t-fast), transform var(--t-fast); }
+    .btn:hover { background: var(--surface-3); } .btn:active { transform: scale(.98); }
+    .btn.ghost { margin-left: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    thead th { text-align: left; padding: var(--s3) var(--s3); color: var(--text-3); font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; border-bottom: 1px solid var(--border-strong); font-weight: 600; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background var(--t-fast); }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover { background: var(--surface-2); }
+    tbody tr.selected { background: var(--accent-soft); }
+    tbody td { padding: var(--s3); color: var(--text); vertical-align: middle; }
+    td .sci { font-style: italic; color: var(--text-3); font-size: .82rem; }
+    .table-wrap { overflow-x: auto; }
+    .bar-bg { background: var(--surface-3); border-radius: 4px; height: 8px; width: 84px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: var(--s2); }
+    .bar-fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--sky)); }
+    .empty { text-align: center; color: var(--text-2); padding: var(--s6) var(--s4); font-size: .95rem; display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
+    .empty svg { width: 32px; height: 32px; color: var(--text-3); }
+
+    .sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s4); margin-bottom: var(--s5); }
+    .flag-list { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+    .flag { display: inline-flex; align-items: center; gap: var(--s2); border-radius: var(--r-pill); padding: 4px 12px; font-size: .82rem; font-weight: 600; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); color: var(--ok); }
+    .flag.bad { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+    .flag.hist { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 45%, transparent); color: var(--amber); }
+    .flag.neutral { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-2); font-family: var(--mono); font-weight: 500; }
+
+    .help { font-size: .95rem; color: var(--text-2); line-height: 1.65; max-width: 80ch; }
+    .help dt { font-weight: 700; color: var(--text); margin-top: var(--s4); }
+    .help dd { margin-left: 0; }
+    .help h3 { margin-top: var(--s5); }
+    .help p { margin-top: var(--s2); }
+    footer { text-align: center; color: var(--text-3); font-size: .8rem; margin-top: var(--s6); }
+
+    /* ═════════ Monitor en vivo ═════════ */
+    .live-controls { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s4); }
+    .live-btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 48px; padding: 0 var(--s5); border: 0; border-radius: var(--r-md); background: var(--accent); color: var(--accent-ink); font: 700 1rem var(--font); cursor: pointer; transition: filter var(--t-fast), transform var(--t-fast); }
+    .live-btn:hover { filter: brightness(1.08); } .live-btn:active { transform: scale(.98); }
+    .live-btn.stop { background: var(--danger); color: #fff; }
+    .live-btn svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+    .live-vol { font-size: .85rem; color: var(--text-2); display: flex; align-items: center; gap: var(--s2); }
+    input[type=range] { accent-color: var(--accent); width: 140px; min-height: 44px; cursor: pointer; }
+    .live-chip { border-radius: var(--r-pill); padding: 4px 14px; font-size: .8rem; font-weight: 700; letter-spacing: .06em; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border-strong); }
+    .live-chip.on { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+    .live-chip.muted { font-weight: 500; font-family: var(--mono); letter-spacing: 0; }
+    .live-chip:empty { display: none; }
+    .live-notice { display: flex; align-items: flex-start; gap: var(--s3); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4); font-size: .84rem; color: var(--text-2); margin-bottom: var(--s4); }
+    .live-notice svg { width: 18px; height: 18px; margin-top: 2px; color: var(--text-3); }
+    .live-notice.err { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+    .spec-wrap { position: relative; border-radius: var(--r-md); overflow: hidden; background: #040c12; border: 1px solid var(--border-strong); transition: box-shadow var(--t-med); }
+    .spec-wrap.live { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 32px color-mix(in srgb, var(--accent) 22%, transparent); }
+    #live-spec { width: 100%; aspect-ratio: 900 / 340; height: auto; display: block; }
+    .spec-bands { position: absolute; inset: 0; pointer-events: none; }
+    .spec-band { position: absolute; left: 0; right: 0; border-top: 1px dashed; border-bottom: 1px dashed; }
+    .spec-band.bio { top: 33.333%; height: 50%; border-color: rgba(82,214,193,.35); background: rgba(82,214,193,.035); }
+    .spec-band.anthro { top: 83.333%; height: 15%; border-color: rgba(245,165,36,.55); background: rgba(245,165,36,.07); }
+    .spec-band span { position: absolute; right: 8px; top: 4px; font-size: .66rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+    .spec-band.bio span { color: rgba(82,214,193,.85); } .spec-band.anthro span { color: rgba(245,165,36,.95); }
+    .spec-axis span { position: absolute; left: 8px; font: 500 .66rem var(--mono); color: rgba(220,238,244,.78); transform: translateY(-50%); }
+    .spec-legend { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s3); font-size: .8rem; color: var(--text-2); }
+    .ramp { width: 140px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #0b1722, #146464, #64B1C5, #f0c85a, #fff5dc); }
+    .meter-row { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0; }
+    .meter-label { width: 100px; font-size: .84rem; color: var(--text-2); font-weight: 500; }
+    .meter { position: relative; flex: 1; height: 12px; background: var(--surface-3); border-radius: 6px; overflow: hidden; }
+    .meter-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--sky), var(--accent)); border-radius: 6px; transition: width 80ms linear; }
+    .meter-fill.anthro { background: var(--amber); } .meter-fill.bio { background: var(--accent); }
+    .meter-peak { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); left: 0; }
+    .meter-val { width: 92px; text-align: right; font-size: .82rem; color: var(--text); }
+    .live-ndsi { margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
+    .live-ndsi .label { font-size: .76rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .12em; font-weight: 600; }
+    .live-ndsi .value { font: 700 2.4rem var(--mono); color: var(--accent); }
+
+    .play-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -8px 0; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--accent); cursor: pointer; transition: background var(--t-fast), transform var(--t-fast); }
+    .play-btn:hover { background: var(--accent-soft); } .play-btn:active { transform: scale(.94); }
+    .play-btn svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+    .play-btn.playing { background: var(--accent); color: var(--accent-ink); }
+    .link-btn { text-decoration: none; }
+    .clip-note { font-size: .82rem; color: var(--text-3); margin-top: var(--s3); }
+    .spec-thumb { display: block; width: 220px; max-width: none; height: 64px; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--border); background: #041218; }
+    .spec-thumb.err { visibility: hidden; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+
+<!-- Íconos (Lucide-style, trazo 1.75) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/></symbol>
+    <symbol id="i-bird" viewBox="0 0 24 24"><path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="m3 7 9 5 9-5M12 12v10"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+    <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="side">
+    <div class="side-head">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-label="Soundscape Sentinel">
+          <defs><linearGradient id="bm" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#52d6c1"/><stop offset="1" stop-color="#f5a524"/></linearGradient></defs>
+          <rect x="1.5" y="1.5" width="45" height="45" rx="14" fill="none" stroke="url(#bm)" stroke-width="2.2"/>
+          <g fill="url(#bm)"><rect x="10" y="21" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="20" rx="2"/><rect x="24" y="9" width="4" height="30" rx="2"/><rect x="31" y="16" width="4" height="16" rx="2"/><rect x="38" y="22" width="3" height="4" rx="1.5"/></g>
+        </svg>
+        <div><h1>Soundscape<br />Sentinel</h1><p id="site-short">Concepción · Chile</p></div>
+      </div>
+      <button class="icon-btn" id="theme-toggle" aria-label="Cambiar entre tema claro y oscuro" style="display:none"></button>
+    </div>
+    <nav class="tab-nav" role="tablist" aria-label="Secciones del monitor">
+      <button class="tab-btn" role="tab" id="t-resumen" aria-selected="true" aria-controls="tab-resumen" data-tab="resumen"><svg class="i"><use href="#i-dash"/></svg>Resumen</button>
+      <button class="tab-btn" role="tab" id="t-vivo" aria-selected="false" aria-controls="tab-vivo" data-tab="vivo" tabindex="-1"><svg class="i"><use href="#i-live"/></svg>En vivo<span class="live-dot"></span></button>
+      <button class="tab-btn" role="tab" id="t-aves" aria-selected="false" aria-controls="tab-aves" data-tab="aves" tabindex="-1"><svg class="i"><use href="#i-bird"/></svg>Avifauna</button>
+      <button class="tab-btn" role="tab" id="t-paisaje" aria-selected="false" aria-controls="tab-paisaje" data-tab="paisaje" tabindex="-1"><svg class="i"><use href="#i-wave"/></svg>Paisaje sonoro</button>
+      <button class="tab-btn" role="tab" id="t-diel" aria-selected="false" aria-controls="tab-diel" data-tab="diel" tabindex="-1"><svg class="i"><use href="#i-clock"/></svg>Ciclo diario</button>
+      <button class="tab-btn" role="tab" id="t-metodo" aria-selected="false" aria-controls="tab-metodo" data-tab="metodo" tabindex="-1"><svg class="i"><use href="#i-book"/></svg>Metodología</button>
+      <button class="tab-btn" role="tab" id="t-paisaje3d" aria-selected="false" aria-controls="tab-paisaje3d" data-tab="paisaje3d" tabindex="-1"><svg class="i"><use href="#i-cube"/></svg>Paisaje 3D-experimental</button>
+    </nav>
+    <div class="side-foot">
+      <div class="status-pill" id="status-pill" role="status" aria-live="polite"><span class="status-dot"></span><span id="status-text">Cargando…</span></div>
+      <button class="icon-btn" id="theme-toggle-side" aria-label="Cambiar entre tema claro y oscuro"></button>
+    </div>
+  </aside>
+
+  <main class="main" id="main" tabindex="-1">
+    <div class="demo-banner" id="demo-banner" role="note"><svg class="i"><use href="#i-alert"/></svg><span></span></div>
+
+    <!-- ───────── Resumen ───────── -->
+    <section class="tab-panel active" id="tab-resumen" role="tabpanel" aria-labelledby="t-resumen">
+      <div class="hero">
+        <div>
+          <h2 id="hero-title">Escuchando Concepción</h2>
+          <p id="hero-sub">Monitoreo acústico continuo: identificación automática de aves e índices que miden cómo suena el paisaje, las 24 horas.</p>
+          <div class="chips"><span class="chip" id="chip-model">Operación 24/7</span><span class="chip" id="chip-plan">60 s cada 10 min</span><span class="chip" id="chip-gen">–</span></div>
+        </div>
+        <div class="gauge" id="gauge" aria-live="polite"></div>
+      </div>
+      <div class="stats-row skeleton" id="stats-row">
+        <div class="stat-card"><div class="label"><svg class="i"><use href="#i-bird"/></svg>Detecciones</div><div class="value" id="s-det">&nbsp;</div><div class="sub" id="s-det-sub">&nbsp;</div></div>
+        <div class="stat-card"><div class="label"><svg class="i"><use href="#i-search"/></svg>Especies</div><div class="value" id="s-sp">&nbsp;</div><div class="sub">riqueza acumulada</div></div>
+        <div class="stat-card"><div class="label"><svg class="i"><use href="#i-wave"/></svg>NDSI medio</div><div class="value" id="s-ndsi">&nbsp;</div><div class="sub">−1 antropofonía · +1 biofonía</div></div>
+        <div class="stat-card"><div class="label"><svg class="i"><use href="#i-mic"/></svg>Muestras</div><div class="value" id="s-n">&nbsp;</div><div class="sub" id="s-n-sub">&nbsp;</div></div>
+        <div class="stat-card"><div class="label"><svg class="i"><use href="#i-clock"/></svg>Última muestra</div><div class="value small" id="s-last">&nbsp;</div><div class="sub" id="s-gen">&nbsp;</div></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Detecciones y riqueza por día</h3>
+          <div class="hint">Barras: nº de detecciones. Línea: especies distintas ese día.</div>
+          <div class="chart-box"><canvas id="c-daily" role="img" aria-label="Detecciones y riqueza de especies por día"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>NDSI por día</h3>
+          <div class="hint">Promedio diario del índice de paisaje sonoro normalizado.</div>
+          <div class="chart-box"><canvas id="c-ndsi-daily" role="img" aria-label="NDSI promedio por día"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Especies más detectadas</h3>
+        <div class="chart-box short"><canvas id="c-top" role="img" aria-label="Especies más detectadas"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ───────── En vivo ───────── -->
+    <section class="tab-panel" id="tab-vivo" role="tabpanel" aria-labelledby="t-vivo">
+      <div class="page-head"><div><h2>Monitor en tiempo real</h2><p>Escucha lo que capta el micrófono ahora mismo y mira su espectrograma. El micrófono solo se abre mientras estás escuchando.</p></div></div>
+      <div class="card">
+        <div class="live-controls">
+          <button class="live-btn" id="live-toggle" aria-label="Empezar a escuchar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><span>Escuchar</span></button>
+          <label class="live-vol">Volumen <input type="range" id="live-vol" min="0" max="1" step="0.01" value="1" aria-label="Volumen" /></label>
+          <label class="live-vol">Ganancia <input type="range" id="live-gain" min="0" max="45" step="1" value="24" aria-label="Ganancia del audio en decibeles" /><span class="num" id="live-gain-v">+24 dB</span></label>
+          <span class="live-chip" id="live-chip" role="status">DETENIDO</span>
+          <span class="live-chip muted" id="live-lat"></span>
+        </div>
+        <div class="live-notice" id="live-notice" style="display:none"><svg class="i"><use href="#i-lock"/></svg><span id="live-notice-txt"></span></div>
+        <div class="spec-wrap" id="spec-wrap">
+          <canvas id="live-spec" width="900" height="340" role="img" aria-label="Espectrograma en vivo, 0 a 12 kHz"></canvas>
+          <div class="spec-bands" aria-hidden="true">
+            <div class="spec-band bio"><span>Banda de aves 2–8 kHz</span></div>
+            <div class="spec-band anthro"><span>Antropofonía 0,2–2 kHz</span></div>
+          </div>
+          <div class="spec-axis" id="spec-axis" aria-hidden="true"></div>
+        </div>
+        <div class="spec-legend"><span>Intensidad</span><span class="ramp" aria-hidden="true"></span><span>baja → alta · ventana ≈ 22 s</span></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Nivel y bandas</h3>
+          <div class="meter-row"><span class="meter-label">Nivel RMS</span><div class="meter"><div class="meter-fill" id="m-rms"></div><div class="meter-peak" id="m-peak"></div></div><span class="meter-val" id="v-rms">– dBFS</span></div>
+          <div class="meter-row"><span class="meter-label">Antropofonía</span><div class="meter"><div class="meter-fill anthro" id="m-anthro"></div></div><span class="meter-val" id="v-anthro">–</span></div>
+          <div class="meter-row"><span class="meter-label">Biofonía (aves)</span><div class="meter"><div class="meter-fill bio" id="m-bio"></div></div><span class="meter-val" id="v-bio">–</span></div>
+          <div class="live-ndsi"><div><div class="label">NDSI de aves · últimos 60 s</div><div class="hint" id="v-ndsi-sub" style="margin:var(--s1) 0 0">–</div></div><div class="value" id="v-ndsi">–</div></div>
+          <div class="hint" style="margin:var(--s3) 0 0">Antropofonía: energía de 0,2–2 kHz (voz, música, tráfico), siempre. Biofonía: energía de 2–8 kHz solo en los instantes en que se detecta canto de aves (se asigna cuando llega la detección, con unos segundos de retraso). NDSI estándar sin filtrar por aves (1–2 kHz frente a 2–8 kHz): <span class="num" id="v-ndsi-std">–</span>.</div>
+        </div>
+        <div class="card">
+          <h3>Últimas detecciones</h3>
+          <div class="hint">Especies identificadas automáticamente en los últimos minutos.</div>
+          <div id="live-det" class="table-wrap"><div class="empty"><svg class="i"><use href="#i-live"/></svg>Abre el monitor para ver las últimas detecciones.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── Avifauna ───────── -->
+    <section class="tab-panel" id="tab-aves" role="tabpanel" aria-labelledby="t-aves">
+      <div class="page-head"><div><h2>Avifauna</h2><p>Especies identificadas automáticamente. La confianza (0–1) indica la certeza de cada identificación.</p></div>
+        <a class="btn link-btn" id="dl-pos" href="#" download><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>Descargar detecciones</a></div>
+      <div class="card">
+        <div class="toolbar"><label for="sp-search">Buscar</label><input type="search" id="sp-search" placeholder="nombre común o científico" /></div>
+        <div id="sp-table" class="table-wrap"></div>
+      </div>
+      <div class="card" id="sp-hourly-card" style="display:none">
+        <h3 id="sp-hourly-title">Actividad por hora</h3>
+        <div class="chart-box short"><canvas id="c-sp-hourly" role="img" aria-label="Actividad de la especie por hora del día"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Detecciones recientes</h3>
+        <div id="recent-table" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- ───────── Paisaje sonoro ───────── -->
+    <section class="tab-panel" id="tab-paisaje" role="tabpanel" aria-labelledby="t-paisaje">
+      <div class="page-head"><div><h2>Paisaje sonoro</h2><p>Índices acústicos calculados sobre 1 minuto de audio cada 10 minutos.</p></div></div>
+      <div class="card">
+        <div class="toolbar">
+          <label for="idx-select">Índice</label><select id="idx-select"></select>
+          <label for="idx-res">Resolución</label><select id="idx-res"><option value="hourly">Por hora</option><option value="daily">Por día</option></select>
+          <button class="btn ghost" id="idx-reset">Ver todo</button>
+        </div>
+        <div class="hint" id="idx-desc"></div>
+        <div class="chart-box"><canvas id="c-idx" role="img" aria-label="Serie temporal del índice seleccionado"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Últimas 12 horas · todos los índices</h3>
+        <div id="idx-table" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- ───────── Ciclo diario ───────── -->
+    <section class="tab-panel" id="tab-diel" role="tabpanel" aria-labelledby="t-diel">
+      <div class="page-head"><div><h2>Ciclo diario</h2><p>Cómo cambia el paisaje sonoro y la actividad de aves a lo largo del día (hora local).</p></div></div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Ciclo diel del índice</h3>
+          <div class="toolbar"><label for="diel-select">Índice</label><select id="diel-select"></select></div>
+          <div class="hint">Promedio por hora del día de todo el histórico.</div>
+          <div class="chart-box"><canvas id="c-diel" role="img" aria-label="Ciclo diario del índice"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Actividad de aves por hora</h3>
+          <div class="hint">Detecciones acumuladas por hora del día. El coro del amanecer suele concentrar la mayor actividad.</div>
+          <div class="chart-box"><canvas id="c-det-hour" role="img" aria-label="Detecciones de aves por hora del día"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── Metodología ───────── -->
+    <section class="tab-panel" id="tab-metodo" role="tabpanel" aria-labelledby="t-metodo">
+      <div class="page-head"><div><h2>Metodología</h2><p>Cómo se obtienen los datos y qué significa cada índice.</p></div></div>
+      <div class="card help">
+        <h3>Cómo se obtienen los datos</h3>
+        <p>Un micrófono conectado a una unidad de procesamiento en terreno captura audio de forma continua. Dos procesos analizan ese mismo audio a la vez:</p>
+        <dl>
+          <dt>1. Identificación de aves</dt>
+          <dd>Analiza el audio en tiempo real con un modelo de aprendizaje automático, filtra por ubicación (Concepción) y guarda cada detección con su nivel de confianza.</dd>
+          <dt>2. Índices de paisaje sonoro</dt>
+          <dd>Cada 10 minutos se graba 1 minuto y se calculan los índices acústicos. El audio se conserva unos días para auditoría.</dd>
+        </dl>
+        <p>El dashboard se regenera cada 6 horas (00, 06, 12 y 18 h, hora local) y la página se refresca sola cada 5 minutos.</p>
+        <h3>Índices</h3>
+        <dl id="idx-methods"></dl>
+        <h3>Limitaciones</h3>
+        <p>Los índices acústicos son sensibles al ruido (lluvia, viento, tráfico) y se interpretan mejor como tendencias que como valores absolutos. Una muestra de 1 min cada 10 min cubre cerca del 10 % del tiempo.</p>
+      </div>
+    </section>
+
+    <!-- ───────── Paisaje 3D-experimental ───────── -->
+    <section class="tab-panel" id="tab-paisaje3d" role="tabpanel" aria-labelledby="t-paisaje3d">
+      <div class="page-head"><div><h2>Paisaje 3D-experimental</h2><p>Un bosque como nube de puntos donde aparece la etiqueta de cada especie en el instante en que canta, sincronizada con el espectrograma y el audio.</p></div></div>
+      <div id="p3d-root"><div class="empty"><svg class="i"><use href="#i-cube"/></svg><span>Cargando visor 3D…</span></div></div>
+    </section>
+
+    <audio id="ios-keepalive" playsinline hidden></audio>
+    <footer>Soundscape Sentinel · Monitoreo acústico · Concepción, Chile</footer>
+  </main>
+</div>
+
+<script>
+let D = null; const charts = {}; let selectedSpecies = null;   // declarados primero: setTheme() los lee al iniciar
+// ═════════ Tema ═════════
+const THEME_KEY = "sentinel_theme";
+function currentTheme() { return document.documentElement.dataset.theme; }
+function setTheme(t, persist) {
+  document.documentElement.dataset.theme = t;
+  if (persist) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} }
+  const icon = t === "dark" ? "i-sun" : "i-moon", txt = t === "dark" ? "Tema claro" : "Tema oscuro";
+  for (const id of ["theme-toggle", "theme-toggle-side"]) {
+    const b = document.getElementById(id); if (!b) continue;
+    b.innerHTML = `<svg class="i"><use href="#${icon}"/></svg><span>${txt}</span>`;
+    b.setAttribute("aria-label", `Cambiar a ${txt.toLowerCase()}`);
+  }
+  if (D) render();
+}
+(function initTheme() {
+  let t = null; try { t = localStorage.getItem(THEME_KEY); } catch (e) {}
+  if (!t) t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  setTheme(t, false);
+})();
+document.getElementById("theme-toggle-side").addEventListener("click", () => setTheme(currentTheme() === "dark" ? "light" : "dark", true));
+document.getElementById("theme-toggle").addEventListener("click", () => setTheme(currentTheme() === "dark" ? "light" : "dark", true));
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const T = () => ({ accent: css("--accent"), amber: css("--amber"), sky: css("--sky"), violet: css("--violet"), coral: css("--coral"), ok: css("--ok"), danger: css("--danger"),
+  text: css("--text"), text2: css("--text-2"), text3: css("--text-3"), grid: css("--grid"), surface: css("--surface"), surface2: css("--surface-2"), border: css("--border-strong") });
+function chartDefaults() {
+  const c = T();
+  Chart.defaults.font.family = css("--font"); Chart.defaults.font.size = 12; Chart.defaults.color = c.text3;
+  Chart.defaults.borderColor = c.grid;
+  Object.assign(Chart.defaults.plugins.tooltip, { backgroundColor: c.surface2, titleColor: c.text, bodyColor: c.text2, borderColor: c.border, borderWidth: 1, padding: 10, cornerRadius: 8, displayColors: true, boxPadding: 4 });
+  Chart.defaults.plugins.legend.labels.color = c.text2; Chart.defaults.plugins.legend.labels.usePointStyle = true; Chart.defaults.plugins.legend.labels.boxWidth = 8;
+}
+
+// ═════════ Datos ═════════
+const IDX_INFO = {
+  NDSI: { label: "NDSI", unit: "−1 a +1", desc: "Índice Normalizado de Paisaje Sonoro (Kasten 2012): (biofonía 2–8 kHz − antropofonía 1–2 kHz) / (suma). Cerca de +1 predomina el sonido biológico; cerca de −1, el ruido humano.", method: "Razón entre la potencia espectral en 2–8 kHz (biofonía) y 1–2 kHz (antropofonía). Ref.: Kasten et al. 2012." },
+  ACI: { label: "ACI", unit: "adim.", desc: "Índice de Complejidad Acústica (Pieretti 2011) en 2–8 kHz: mide la variabilidad de la intensidad en el tiempo. Sube con cantos de aves y baja con ruido constante (lluvia, viento).", method: "Suma de diferencias de intensidad entre ventanas consecutivas por banda de frecuencia, en 2–8 kHz. Ref.: Pieretti et al. 2011." },
+  ADI: { label: "ADI", unit: "adim.", desc: "Índice de Diversidad Acústica (Villanueva-Rivera 2011): entropía de Shannon de la energía repartida en bandas de 1 kHz (0–10 kHz). Más alto = energía repartida en más bandas.", method: "Shannon sobre 10 bandas de 1 kHz con umbral de −50 dB. Ref.: Villanueva-Rivera et al. 2011." },
+  AEI: { label: "AEI", unit: "0 a 1", desc: "Índice de Uniformidad Acústica: coeficiente de Gini de la energía entre bandas. Cercano a 1 = energía concentrada en pocas bandas; cercano a 0 = repartida de forma pareja.", method: "Gini sobre las mismas bandas que el ADI. Ref.: Villanueva-Rivera et al. 2011." },
+  BI: { label: "BI", unit: "adim.", desc: "Índice Bioacústico (Boelman 2007): área bajo la curva del espectro medio en 2–8 kHz. Refleja cuánta energía y cuán amplia es la actividad de aves en esa banda.", method: "Área del espectro medio (dB) por encima del mínimo en 2–8 kHz. Ref.: Boelman et al. 2007." },
+  H: { label: "H (entropía)", unit: "0 a 1", desc: "Entropía acústica (Sueur 2008) = entropía temporal × espectral. Cercano a 1 = señal compleja o ruidosa; bajo = sonido concentrado en el tiempo o la frecuencia.", method: "Producto de la entropía de la envolvente temporal y del espectro medio. Ref.: Sueur et al. 2008." },
+  rms_dbfs: { label: "Nivel RMS (dBFS)", unit: "dBFS", desc: "Nivel de presión sonora relativo a la escala digital. Útil para ver lluvia, viento o cambios de ganancia. No es un nivel calibrado en dB SPL.", method: "RMS de la muestra de 60 s." },
+  noise_floor_dbfs: { label: "Piso de ruido (dBFS)", unit: "dBFS", desc: "Percentil 10 del nivel en ventanas de 0,1 s: el ruido de fondo del lugar y del micrófono.", method: "Percentil 10 del RMS por ventanas de 0,1 s." }
+};
+const IDX_ORDER = ["NDSI", "ACI", "ADI", "AEI", "BI", "H", "rms_dbfs", "noise_floor_dbfs"];
+const DEMO = false;   // modo demostración desactivado en producción
+const DATA_URL = DEMO ? "data_demo.json" : "data.json";
+const REFRESH_MS = 5 * 60 * 1000, STALE_MS = 7 * 3600 * 1000;
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(+v)) ? "–" : (+v).toFixed(d);
+const ago = ms => { const m = Math.round(ms / 60000); if (m < 60) return `hace ${m} min`; const h = m / 60; if (h < 48) return `hace ${h.toFixed(1)} h`; return `hace ${Math.round(h / 24)} d`; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const dtf = (iso, opts) => new Date(iso).toLocaleString("es-CL", opts || { dateStyle: "short", timeStyle: "short" });
+const icon = id => `<svg class="i"><use href="#${id}"/></svg>`;
+function mk(id, cfg) { if (charts[id]) charts[id].destroy(); const el = $(id); if (!el) return; chartDefaults(); charts[id] = new Chart(el, cfg); return charts[id]; }
+const baseOpts = () => ({ responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { display: false } } });
+const gridOpt = () => ({ color: T().grid, drawTicks: false });
+const emptyBlock = (ic, txt) => `<div class="empty">${icon(ic)}<span>${txt}</span></div>`;
+
+// ═════════ Tabs (teclado: ←/→/Home/End) ═════════
+const TABS = [...document.querySelectorAll(".tab-btn")];
+function selectTab(name, focus) {
+  if (name !== "vivo" && typeof liveStop === "function") liveStop();   // no dejar el micrófono abierto al cambiar de sección
+  if (typeof CLIP !== "undefined" && CLIP.el) { CLIP.el.pause(); clipReset(); }
+  if (name !== "paisaje3d" && window.__p3d) window.__p3d.leave();   // libera WebGL, audio y memoria del visor 3D
+  TABS.forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + name));
+  render(name);
+  try { history.replaceState(null, "", "#" + name); } catch (e) {}
+}
+TABS.forEach((b, i) => {
+  b.addEventListener("click", () => selectTab(b.dataset.tab));
+  b.addEventListener("keydown", e => {
+    const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (k) { e.preventDefault(); selectTab(TABS[(i + k + TABS.length) % TABS.length].dataset.tab, true); }
+    else if (e.key === "Home") { e.preventDefault(); selectTab(TABS[0].dataset.tab, true); }
+    else if (e.key === "End") { e.preventDefault(); selectTab(TABS[TABS.length - 1].dataset.tab, true); }
+  });
+});
+const activeTab = () => document.querySelector('.tab-btn[aria-selected="true"]').dataset.tab;
+
+// ═════════ Carga ═════════
+async function load() {
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    D = await r.json();
+    $("demo-banner").classList.toggle("on", !!D.meta.demo);
+    $("stats-row").classList.remove("skeleton");
+    render();
+  } catch (e) {
+    $("status-pill").classList.add("offline");
+    $("status-text").textContent = "Sin datos (" + e.message + ")";
+  }
+}
+function setStatus() {
+  const gen = new Date(D.meta.generated_at), age = Date.now() - gen.getTime(), stale = false;
+  $("status-pill").classList.toggle("offline", stale);
+  $("status-text").textContent = "Captura del 23 nov 2026";
+  $("site-short").textContent = D.meta.site.name.replace(", ", " · ");
+}
+function render(tab) {
+  if (!D) return; setStatus(); tab = tab || activeTab();
+  ({ resumen, vivo, aves, paisaje, diel, metodo, paisaje3d }[tab] || (() => {}))();
+}
+
+// ═════════ Paisaje 3D-experimental (módulos en js/paisaje3d/, se cargan al abrir la pestaña) ═════════
+let p3dCarga = null;
+async function paisaje3d() {
+  const root = $("p3d-root");
+  if (!window.__p3d) {
+    p3dCarga = p3dCarga || import("./js/paisaje3d/main.js").then(m => { window.__p3d = m; });
+    try { await p3dCarga; }
+    catch (e) { p3dCarga = null; root.innerHTML = emptyBlock("i-alert", "No se pudo cargar el visor 3D (" + esc(e.message) + "). Three.js se descarga desde un CDN: revisa tu conexión."); return; }
+  }
+  if (activeTab() !== "paisaje3d") return;   // el usuario cambió de pestaña mientras cargaba
+  window.__p3d.mount({ root, data: D, liveBase: LIVE_BASE });
+}
+
+// ═════════ Resumen ═════════
+function gaugeSVG(v) {
+  const c = T(), R = 92, cx = 130, cy = 120;
+  const pt = (a, r = R) => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+  const arc = (a0, a1, r = R) => { const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+  const has = v !== null && v !== undefined && !Number.isNaN(+v);
+  const ang = has ? Math.PI * (1 - (Math.max(-1, Math.min(1, v)) + 1) / 2) : Math.PI / 2;
+  const [nx, ny] = pt(ang, R - 18);
+  return `<svg viewBox="0 0 260 188" role="img" aria-label="${has ? "NDSI actual " + (+v).toFixed(2) : "NDSI sin datos"}">
+    <defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="${c.amber}"/><stop offset=".5" stop-color="${c.sky}"/><stop offset="1" stop-color="${c.accent}"/></linearGradient></defs>
+    <path d="${arc(Math.PI, 0)}" fill="none" stroke="${c.border}" stroke-width="14" stroke-linecap="round" opacity=".5"/>
+    <path d="${arc(Math.PI, 0)}" fill="none" stroke="url(#gg)" stroke-width="14" stroke-linecap="round"/>
+    ${has ? `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="${c.text}" stroke-width="3" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="7" fill="${c.text}"/>` : ""}
+    <text class="g-lbl" x="${cx - R}" y="${cy + 20}" text-anchor="middle">−1</text><text class="g-lbl" x="${cx + R}" y="${cy + 20}" text-anchor="middle">+1</text>
+    <text class="g-num" x="${cx}" y="${cy + 44}" text-anchor="middle">${has ? (+v).toFixed(2) : "–"}</text>
+    <text class="g-cap" x="${cx}" y="${cy + 64}" text-anchor="middle">NDSI última hora</text></svg>`;
+}
+function resumen() {
+  const det = D.detections, ix = D.indices;
+  const lastH = [...ix.hourly].reverse().find(r => r.NDSI !== null);
+  $("gauge").innerHTML = gaugeSVG(lastH ? lastH.NDSI : null) + `<div class="gauge-note">${lastH ? (lastH.NDSI > 0.2 ? "Predomina la biofonía" : lastH.NDSI < -0.2 ? "Predomina la antropofonía" : "Paisaje mixto") : "Sin muestras todavía"}</div>`;
+  $("hero-title").textContent = "Escuchando " + D.meta.site.name.split(",")[0];
+  $("chip-plan").textContent = D.meta.sample_plan; $("chip-gen").textContent = "exportado " + dtf(D.meta.generated_at);
+  $("s-det").textContent = det.total.toLocaleString("es-CL");
+  $("s-det-sub").textContent = det.daily.length ? `en ${det.daily.length} días con actividad` : "aún sin detecciones";
+  $("s-sp").textContent = det.species_count;
+  const nd = ix.daily.map(d => d.NDSI).filter(v => v !== null);
+  $("s-ndsi").textContent = nd.length ? fmt(nd.reduce((a, b) => a + b, 0) / nd.length) : "–";
+  $("s-n").textContent = ix.n_samples.toLocaleString("es-CL");
+  $("s-n-sub").textContent = `${(ix.n_samples / 60).toFixed(1)} h de audio analizado`;
+  $("s-last").textContent = ix.last ? dtf(ix.last) : "–";
+  $("s-gen").textContent = "exportado " + dtf(D.meta.generated_at);
+
+  const c = T(), days = det.daily;
+  mk("c-daily", { data: { labels: days.map(d => d.date), datasets: [
+      { type: "bar", label: "Detecciones", data: days.map(d => d.n), backgroundColor: c.accent + "cc", hoverBackgroundColor: c.accent, yAxisID: "y", borderRadius: 4, maxBarThickness: 28 },
+      { type: "line", label: "Especies", data: days.map(d => d.richness), borderColor: c.amber, backgroundColor: c.amber, yAxisID: "y2", tension: .3, pointRadius: 3, borderWidth: 2 } ] },
+    options: { ...baseOpts(), plugins: { legend: { display: true, position: "bottom" } }, scales: { x: { grid: { display: false } }, y: { grid: gridOpt(), beginAtZero: true, title: { display: true, text: "detecciones" } }, y2: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: "especies" } } } } });
+  mk("c-ndsi-daily", { type: "line", data: { labels: ix.daily.map(d => d.date), datasets: [{ label: "NDSI", data: ix.daily.map(d => d.NDSI), borderColor: c.accent, backgroundColor: c.accent + "22", fill: true, tension: .3, pointRadius: 3, borderWidth: 2 }] },
+    options: { ...baseOpts(), scales: { x: { grid: { display: false } }, y: { grid: gridOpt(), min: -1, max: 1 } } } });
+  const top = det.by_species.slice(0, 10);
+  mk("c-top", { type: "bar", data: { labels: top.map(s => s.common), datasets: [{ label: "Detecciones", data: top.map(s => s.n), backgroundColor: c.sky + "cc", hoverBackgroundColor: c.sky, borderRadius: 4 }] },
+    options: { ...baseOpts(), indexAxis: "y", scales: { x: { grid: gridOpt(), beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } } });
+}
+
+// ═════════ Avifauna ═════════
+function aves() {
+  const det = D.detections, q = ($("sp-search").value || "").toLowerCase();
+  const list = det.by_species.filter(s => !q || s.common.toLowerCase().includes(q) || s.sci.toLowerCase().includes(q));
+  const max = Math.max(1, ...det.by_species.map(s => s.n));
+  $("sp-table").innerHTML = list.length ? `<table><thead><tr><th>Especie</th><th>Detecciones</th><th>Confianza media</th><th>Máx.</th><th>Última vez</th></tr></thead><tbody>` +
+    list.map(s => `<tr class="clickable ${s.sci === selectedSpecies ? "selected" : ""}" data-sci="${esc(s.sci)}" tabindex="0" role="button" aria-label="Ver actividad por hora de ${esc(s.common)}"><td>${esc(s.common)}<br><span class="sci">${esc(s.sci)}</span></td>
+      <td class="n"><span class="bar-bg"><span class="bar-fill" style="width:${(100 * s.n / max).toFixed(0)}%"></span></span>${s.n}</td>
+      <td class="n">${fmt(s.mean_conf)}</td><td class="n">${fmt(s.max_conf)}</td><td>${dtf(s.last)}</td></tr>`).join("") + `</tbody></table>`
+    : emptyBlock("i-bird", det.total ? "Sin coincidencias." : "Aún no hay detecciones. Las especies aparecerán aquí cuando se identifiquen.");
+  document.querySelectorAll("#sp-table tr.clickable").forEach(tr => {
+    const pick = () => { selectedSpecies = tr.dataset.sci; aves(); };
+    tr.addEventListener("click", pick); tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+  const sp = det.by_species.find(s => s.sci === selectedSpecies);
+  $("sp-hourly-card").style.display = sp ? "block" : "none";
+  if (sp) {
+    $("sp-hourly-title").textContent = "Actividad por hora — " + sp.common;
+    mk("c-sp-hourly", { type: "bar", data: { labels: [...Array(24).keys()].map(h => h + ":00"), datasets: [{ label: "Detecciones", data: sp.hourly, backgroundColor: T().accent + "cc", borderRadius: 4 }] }, options: { ...baseOpts(), scales: { x: { grid: { display: false } }, y: { grid: gridOpt(), beginAtZero: true, ticks: { precision: 0 } } } } });
+  }
+  $("recent-table").innerHTML = det.recent.length ? `<table><thead><tr><th>Escuchar</th><th>Espectrograma</th><th>Fecha y hora</th><th>Especie</th><th>Confianza</th></tr></thead><tbody>` +
+    det.recent.map(r => `<tr><td>${playBtn(r.id, r.common)}</td><td>${specThumb(r.id, r.common)}</td><td>${dtf(r.dt, { dateStyle: "short", timeStyle: "medium" })}</td><td>${esc(r.common)} <span class="sci">${esc(r.sci)}</span></td><td class="n">${fmt(r.conf)}</td></tr>`).join("") + `</tbody></table>` +
+      `<div class="clip-note">Cada detección conserva un clip de audio de unos 12 s que se puede reproducir con el botón de la primera columna.</div>`
+    : emptyBlock("i-bird", "Sin detecciones recientes.");
+}
+$("sp-search").addEventListener("input", () => aves());
+
+// ═════════ Paisaje sonoro ═════════
+function fillIdxSelects() {
+  for (const id of ["idx-select", "diel-select"]) { const el = $(id); if (el.options.length) continue; IDX_ORDER.forEach(k => el.add(new Option(IDX_INFO[k].label, k))); }
+}
+function paisaje() {
+  fillIdxSelects();
+  const k = $("idx-select").value || "NDSI", res = $("idx-res").value, c = T();
+  $("idx-desc").textContent = IDX_INFO[k].desc;
+  const rows = D.indices[res], x = rows.map(r => res === "hourly" ? r.dt : r.date);
+  mk("c-idx", { type: "line", data: { labels: x, datasets: [{ label: IDX_INFO[k].label, data: rows.map(r => r[k]), borderColor: c.accent, backgroundColor: c.accent + "1f", fill: true, tension: .25, borderWidth: 2, pointRadius: rows.length > 200 ? 0 : 3, pointHoverRadius: 5 }] },
+    options: { ...baseOpts(), scales: { x: { type: "time", time: { unit: res === "hourly" ? "day" : "week" }, grid: gridOpt() }, y: { grid: gridOpt(), title: { display: true, text: IDX_INFO[k].unit } } },
+      plugins: { legend: { display: false }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" }, pan: { enabled: true, mode: "x" } } } } });
+  const last = D.indices.hourly.slice(-12).reverse();
+  $("idx-table").innerHTML = last.length ? `<table><thead><tr><th>Hora</th>${IDX_ORDER.map(i => `<th>${IDX_INFO[i].label}</th>`).join("")}<th>Muestras</th></tr></thead><tbody>` +
+    last.map(r => `<tr><td>${dtf(r.dt)}</td>${IDX_ORDER.map(i => `<td class="n">${fmt(r[i], i === "ACI" ? 1 : 3)}</td>`).join("")}<td class="n">${r.n}</td></tr>`).join("") + `</tbody></table>`
+    : emptyBlock("i-wave", "Aún no hay muestras acústicas.");
+}
+$("idx-select").addEventListener("change", paisaje); $("idx-res").addEventListener("change", paisaje);
+$("idx-reset").addEventListener("click", () => charts["c-idx"] && charts["c-idx"].resetZoom());
+
+// ═════════ Ciclo diario ═════════
+function diel() {
+  fillIdxSelects();
+  const k = $("diel-select").value || "NDSI", hours = [...Array(24).keys()].map(h => h + ":00"), c = T();
+  mk("c-diel", { type: "line", data: { labels: hours, datasets: [{ label: IDX_INFO[k].label, data: D.indices.diel[k], borderColor: c.amber, backgroundColor: c.amber + "22", fill: true, tension: .35, pointRadius: 3, borderWidth: 2, spanGaps: true }] },
+    options: { ...baseOpts(), scales: { x: { grid: { display: false } }, y: { grid: gridOpt(), title: { display: true, text: IDX_INFO[k].unit } } } } });
+  mk("c-det-hour", { type: "bar", data: { labels: hours, datasets: [{ label: "Detecciones", data: D.detections.hourly, backgroundColor: c.accent + "cc", borderRadius: 4 }] },
+    options: { ...baseOpts(), scales: { x: { grid: { display: false } }, y: { grid: gridOpt(), beginAtZero: true, ticks: { precision: 0 } } } } });
+}
+$("diel-select").addEventListener("change", diel);
+
+function metodo() { $("idx-methods").innerHTML = IDX_ORDER.map(k => `<dt>${IDX_INFO[k].label}</dt><dd>${IDX_INFO[k].method}</dd>`).join(""); }
+
+// ═════════ Monitor en vivo (Web Audio) ═════════
+// teaser: el audio del monitor se reproduce desde ./live/
+const LIVE_BASE = ".";   // teaser: todo sale de ./live/
+$("dl-pos").hidden = true;   // teaser: sin descarga   // ZIP con CSV + audios de las detecciones
+function specThumb(id, name) {   // espectrograma del clip (PNG, 0–12 kHz)
+  if (id === null || id === undefined) return `<span class="sci">–</span>`;
+  return `<img class="spec-thumb" loading="lazy" src="${LIVE_BASE}/live/spec/${encodeURIComponent(id)}.png" alt="Espectrograma de ${esc(name)}" onerror="this.classList.add('err')">`;
+}
+const CLIP = { el: null, id: null, btn: null };
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";   // WAV mono de 0 muestras, para mantener la sesión de audio
+const PLAY_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>`, STOP_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+function playBtn(id, name) {
+  if (id === null || id === undefined || D && D.meta.demo) return `<span class="sci">–</span>`;
+  return `<button class="play-btn" data-clip="${esc(id)}" aria-label="Escuchar clip de ${esc(name)}">${PLAY_SVG}</button>`;
+}
+function clipReset() { if (CLIP.btn) { CLIP.btn.classList.remove("playing"); CLIP.btn.innerHTML = PLAY_SVG; CLIP.btn.setAttribute("aria-label", "Escuchar clip"); } CLIP.btn = null; CLIP.id = null; }
+document.addEventListener("click", e => {
+  const b = e.target.closest(".play-btn"); if (!b) return;
+  const id = b.dataset.clip, same = CLIP.id === id;
+  if (CLIP.el) { CLIP.el.pause(); }
+  clipReset(); if (same) return;
+  if (LV.on) liveStop();   // evita que el monitor en vivo y el clip suenen a la vez
+  CLIP.el = new Audio(`${LIVE_BASE}/live/clip/${encodeURIComponent(id)}.mp3`);   // clip normalizado (el micrófono capta bajo)
+  CLIP.id = id; CLIP.btn = b; b.classList.add("playing"); b.innerHTML = STOP_SVG; b.setAttribute("aria-label", "Detener clip");
+  CLIP.el.addEventListener("ended", clipReset);
+  CLIP.el.addEventListener("error", () => { clipReset(); alert("No se pudo cargar el clip. Inténtalo de nuevo."); });
+  CLIP.el.play().catch(() => {});
+});
+const LV = { ctx: null, abort: null, gain: null, an: null, next: 0, raf: 0, on: false, pollT: 0, ndsi: null, peak: -120, peakT: 0, lastT: 0 };
+const SPEC_FMAX = 12000, SPEC_DB_MIN = -118, SPEC_DB_MAX = -50;
+function specColor(t) {   // 0..1 → tinta → teal → ámbar → crema (misma rampa que la leyenda)
+  t = Math.max(0, Math.min(1, t));
+  const stops = [[0, [4, 12, 18]], [.25, [20, 100, 100]], [.5, [100, 177, 197]], [.75, [240, 200, 90]], [1, [255, 245, 220]]];
+  for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i], k = (t - t0) / (t1 - t0); return c0.map((v, j) => Math.round(v + (c1[j] - v) * k)); }
+  return stops[stops.length - 1][1];
+}
+function vivo() {
+  const ax = $("spec-axis");
+  if (!ax.children.length) for (const f of [0, 2000, 4000, 6000, 8000, 10000, 12000]) {
+    const s = document.createElement("span"); s.textContent = f ? (f / 1000) + " kHz" : "0"; s.style.top = (100 - 100 * f / SPEC_FMAX) + "%";
+    if (f === 0) s.style.transform = "translateY(-120%)"; if (f === SPEC_FMAX) s.style.transform = "translateY(20%)"; ax.appendChild(s);
+  }
+  if (D && D.meta.demo) setLiveNotice("El modo demostración no tiene micrófono. Abre el dashboard sin ?demo=1 desde la red local para usar el monitor.", true);
+}
+function setLiveNotice(txt, err) { $("live-notice-txt").textContent = txt; $("live-notice").classList.toggle("err", !!err); $("live-notice").style.display = txt ? "" : "none"; }
+function setChip(txt, on) { const c = $("live-chip"); c.textContent = txt; c.classList.toggle("on", !!on); document.querySelector(".live-dot").classList.toggle("on", !!on); $("spec-wrap").classList.toggle("live", !!on); }
+function setBtn(running) {
+  const b = $("live-toggle");
+  b.classList.toggle("stop", running);
+  b.setAttribute("aria-label", running ? "Detener la escucha" : "Empezar a escuchar");
+  b.innerHTML = running ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>Detener</span>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><span>Escuchar</span>`;
+}
+const LIVE_NOTICE_DEFAULT = "";
+
+async function liveStart() {
+  if (LV.on) return;
+  if (CLIP.el) { CLIP.el.pause(); clipReset(); }
+  LV.on = true; LV.abort = new AbortController(); setBtn(true); setChip("CONECTANDO", false);
+  try {
+    // iOS silencia Web Audio con el interruptor de silencio: se pide sesión de "reproducción" (como un reproductor de música)
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    LV.bytes = 0;
+    LV.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000, latencyHint: "interactive" });
+    await LV.ctx.resume();
+    // Respaldo para iOS antiguo: además de salir por Web Audio, mantiene un <audio> silencioso activo para que el sistema trate la página como reproducción multimedia
+    if (!navigator.audioSession) { try { const a = $("ios-keepalive"); a.src = SILENT_WAV; a.loop = true; await a.play(); } catch (e) {} }
+    LV.an = LV.ctx.createAnalyser(); LV.an.fftSize = 4096; LV.an.smoothingTimeConstant = 0.35;
+    LV.an.minDecibels = -140; LV.an.maxDecibels = -20;   // por defecto recorta a −100 dB y un cuarto silencioso sale en negro
+    LV.gain = LV.ctx.createGain(); LV.gain.gain.value = +$("live-vol").value;
+    // El micrófono capta muy bajo (cuarto en silencio ≈ −55 dBFS): se amplifica solo al reproducir, con un limitador para no saturar.
+    // El analizador va antes de la ganancia, así que el espectrograma y los índices no cambian.
+    LV.boost = LV.ctx.createGain(); LV.boost.gain.value = Math.pow(10, +$("live-gain").value / 20);
+    LV.comp = LV.ctx.createDynamicsCompressor();
+    LV.comp.threshold.value = -8; LV.comp.knee.value = 6; LV.comp.ratio.value = 20; LV.comp.attack.value = 0.003; LV.comp.release.value = 0.15;
+    LV.an.connect(LV.boost); LV.boost.connect(LV.comp); LV.comp.connect(LV.gain); LV.gain.connect(LV.ctx.destination);
+    LV.next = 0; LV.ndsi = null; LV.lastT = 0; LV.hist = []; LV.dets = []; LV.acc = { n: 0, A: 0, A1: 0, B: 0, t0: performance.now() };
+    for (const id of ["v-bio", "v-ndsi"]) $(id).textContent = "–"; $("m-bio").style.width = "0%"; $("v-ndsi-sub").textContent = "esperando cantos de aves…"; $("v-ndsi-std").textContent = "–";
+    clearInterval(LV.rollT); LV.rollT = setInterval(liveRoll, 1000);
+    const g0 = $("live-spec").getContext("2d"); g0.fillStyle = "#040c12"; g0.fillRect(0, 0, $("live-spec").width, $("live-spec").height);
+    drawLoop(); pollDetections(); LV.pollT = setInterval(pollDetections, 3000);
+    const r = await fetch(LIVE_BASE + "/live/pcm", { signal: LV.abort.signal });
+    if (!r.ok) throw new Error(r.status === 503 ? "demasiados oyentes conectados" : "HTTP " + r.status);
+    const rate = +(r.headers.get("X-Sample-Rate") || 48000);
+    setLiveNotice(LIVE_NOTICE_DEFAULT, false); setChip("DEMO", true);
+    const reader = r.body.getReader(); let rest = new Uint8Array(0);
+    while (LV.on) {
+      const { value, done } = await reader.read(); if (done) break;
+      let buf = value; if (rest.length) { const m = new Uint8Array(rest.length + value.length); m.set(rest); m.set(value, rest.length); buf = m; }
+      const n = buf.length >> 1; rest = buf.slice(n * 2); if (!n) continue;
+      const i16 = new Int16Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + n * 2)), f32 = new Float32Array(n);
+      for (let i = 0; i < n; i++) f32[i] = i16[i] / 32768;
+      const ab = LV.ctx.createBuffer(1, n, rate); ab.copyToChannel(f32, 0);
+      const now = LV.ctx.currentTime;
+      if (LV.next < now + 0.05) LV.next = now + 0.2;     // subdesbordamiento: recoloca con 200 ms de margen
+      if (LV.next - now > 0.8) continue;                   // demasiado atrasado: descarta para volver al presente
+      const src = LV.ctx.createBufferSource(); src.buffer = ab; src.connect(LV.an); src.start(LV.next); LV.next += ab.duration;
+      LV.bytes += buf.length;
+      $("live-lat").textContent = `${LV.ctx.state} · ${(LV.bytes / 1048576).toFixed(1)} MB · retardo ≈ ${Math.round((LV.next - now) * 1000)} ms`;
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      const net = /Failed to fetch|NetworkError|Load failed/i.test(e.message);
+      setLiveNotice(net ? "No se pudo conectar con el monitor en vivo. Verifica tu conexión e inténtalo de nuevo." : "Error del monitor: " + e.message, true);
+    }
+  } finally { liveStop(); }
+}
+function liveStop() {
+  if (!LV.on && !LV.ctx) return;
+  LV.on = false;
+  try { LV.abort && LV.abort.abort(); } catch (e) {}
+  cancelAnimationFrame(LV.raf); clearInterval(LV.pollT); clearInterval(LV.rollT);
+  try { LV.ctx && LV.ctx.close(); } catch (e) {}
+  LV.ctx = null; LV.an = null; setBtn(false); setChip("DETENIDO", false); $("live-lat").textContent = "";
+  try { $("ios-keepalive").pause(); } catch (e) {}
+}
+$("live-toggle").addEventListener("click", () => LV.on ? liveStop() : liveStart());
+$("live-vol").addEventListener("input", e => { if (LV.gain) LV.gain.gain.value = +e.target.value; });
+$("live-gain").addEventListener("input", e => { const db = +e.target.value; $("live-gain-v").textContent = (db >= 0 ? "+" : "") + db + " dB"; if (LV.boost) LV.boost.gain.value = Math.pow(10, db / 20); });
+window.addEventListener("pagehide", () => liveStop());
+
+function drawLoop() {
+  if (!LV.on || !LV.an) return;
+  const an = LV.an, fs = LV.ctx.sampleRate, bins = an.frequencyBinCount, hz = fs / an.fftSize;
+  const fd = new Float32Array(bins); an.getFloatFrequencyData(fd);
+  const td = new Float32Array(an.fftSize); an.getFloatTimeDomainData(td);
+  const cv = $("live-spec"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  // avance por tiempo (40 columnas/s ≈ 22 s de ventana): no depende de los fps del navegador
+  const tNow = performance.now(), dtMs = LV.lastT ? tNow - LV.lastT : 25; LV.lastT = tNow;
+  const ncol = Math.max(1, Math.min(80, Math.round(dtMs * 0.04)));
+  g.drawImage(cv, ncol, 0, W - ncol, H, 0, 0, W - ncol, H);
+  const col = g.createImageData(1, H), maxBin = Math.min(bins - 1, Math.round(SPEC_FMAX / hz));
+  for (let y = 0; y < H; y++) {
+    const f = (H - 1 - y) / (H - 1) * maxBin, b0 = Math.floor(f), b1 = Math.min(maxBin, b0 + 1), k = f - b0;
+    const db = isFinite(fd[b0]) ? fd[b0] * (1 - k) + fd[b1] * k : SPEC_DB_MIN;
+    const [r, gg, b] = specColor((db - SPEC_DB_MIN) / (SPEC_DB_MAX - SPEC_DB_MIN));
+    col.data[y * 4] = r; col.data[y * 4 + 1] = gg; col.data[y * 4 + 2] = b; col.data[y * 4 + 3] = 255;
+  }
+  for (let k = 0; k < ncol; k++) g.putImageData(col, W - 1 - k, 0);
+  LV.cols = (LV.cols || 0) + ncol;   // teaser: columnas realmente dibujadas (los recuadros se anclan a ellas)
+  if (window.__teaserTick) window.__teaserTick();
+  // nivel RMS / pico
+  let s = 0, pk = 0; for (let i = 0; i < td.length; i++) { s += td[i] * td[i]; if (Math.abs(td[i]) > pk) pk = Math.abs(td[i]); }
+  const rms = Math.sqrt(s / td.length), db = 20 * Math.log10(Math.max(rms, 1e-7)), pdb = 20 * Math.log10(Math.max(pk, 1e-7));
+  const pct = v => Math.max(0, Math.min(100, (v + 90) / 90 * 100));
+  $("m-rms").style.width = pct(db) + "%"; $("v-rms").textContent = db.toFixed(1) + " dBFS";
+  if (pdb > LV.peak || tNow - LV.peakT > 1500) { LV.peak = pdb; LV.peakT = tNow; }
+  $("m-peak").style.left = pct(LV.peak) + "%";
+  // bandas y NDSI en vivo
+  const band = (lo, hi) => { let p = 0; for (let b = Math.ceil(lo / hz); b <= Math.floor(hi / hz) && b < bins; b++) if (isFinite(fd[b])) p += Math.pow(10, fd[b] / 10); return p; };
+  // Antropofonía (0,2–2 kHz: voz, música, tráfico) se mide siempre. La banda de aves (2–8 kHz) se guarda en un historial y solo
+  // cuenta como biofonía en los instantes en que se detecta canto de aves (ver liveRoll). A1 = banda 1–2 kHz del NDSI estándar.
+  const A = band(ANTRO_HZ[0], ANTRO_HZ[1]), A1 = band(1000, 2000), B = band(BIO_HZ[0], BIO_HZ[1]);
+  const dbA = 10 * Math.log10(A + 1e-20);
+  $("m-anthro").style.width = pct(dbA) + "%"; $("v-anthro").textContent = dbA.toFixed(0) + " dB";
+  const ac = LV.acc; ac.n++; ac.A += A; ac.A1 += A1; ac.B += B;
+  if (tNow - ac.t0 >= 250) {   // un punto cada 250 ms (promedio de los fotogramas de ese cuarto de segundo)
+    LV.hist.push({ t: Date.now(), A: ac.A / ac.n, A1: ac.A1 / ac.n, B: ac.B / ac.n });
+    if (LV.hist.length > 520) LV.hist.splice(0, LV.hist.length - 480);   // ≈ 2 min
+    ac.n = 0; ac.A = ac.A1 = ac.B = 0; ac.t0 = tNow;
+  }
+  LV.raf = requestAnimationFrame(drawLoop);
+}
+// Bandas del monitor en vivo y ventana de cálculo
+const ANTRO_HZ = [200, 2000], BIO_HZ = [2000, 8000], LIVE_WIN_S = 60, DET_MIN_CONF = 0.5;
+const dBp = p => 10 * Math.log10(p + 1e-20), media = a => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+// Cada segundo: biofonía = potencia de 2–8 kHz SOLO durante los cantos de aves detectados en la ventana; antropofonía = media de 0,2–2 kHz de toda la ventana.
+function liveRoll() {
+  if (!LV.on) return;
+  const w0 = Date.now() - LIVE_WIN_S * 1000, hs = LV.hist.filter(h => h.t >= w0); if (hs.length < 4) return;
+  const cantos = LV.dets.filter(iv => iv.b >= w0), ave = hs.filter(h => cantos.some(iv => h.t >= iv.a && h.t <= iv.b));
+  const pct = v => Math.max(0, Math.min(100, (v + 90) / 90 * 100)), pA = media(hs.map(h => h.A));
+  if (ave.length < 2) {   // sin cantos de aves en la ventana: no hay biofonía que atribuir
+    $("m-bio").style.width = "0%"; $("v-bio").textContent = "sin aves"; $("v-ndsi").textContent = "–"; $("v-ndsi-sub").textContent = `sin canto de aves detectado en ${LIVE_WIN_S} s`;
+  } else {
+    const pB = media(ave.map(h => h.B)), nd = (pB - pA) / (pB + pA);
+    $("m-bio").style.width = pct(dBp(pB)) + "%"; $("v-bio").textContent = `${dBp(pB).toFixed(0)} dB · ${cantos.length} canto${cantos.length > 1 ? "s" : ""}`;
+    $("v-ndsi").textContent = nd.toFixed(2); $("v-ndsi-sub").textContent = `${cantos.length} canto${cantos.length > 1 ? "s" : ""} de aves en ${LIVE_WIN_S} s`;
+  }
+  const pB1 = media(hs.map(h => h.B)), pA1 = media(hs.map(h => h.A1));   // NDSI estándar de referencia (sin filtrar por aves)
+  $("v-ndsi-std").textContent = ((pB1 - pA1) / (pB1 + pA1)).toFixed(2);
+}
+async function pollDetections() {
+  try {
+    const r = await fetch(LIVE_BASE + "/live/detections", { cache: "no-store" }), j = await r.json(), todas = j.items || [], items = todas.slice(0, 8);
+    // intervalos de canto: la ventana de 3 s termina en el instante del acierto; margen para el retardo del audio en vivo
+    LV.dets = todas.filter(it => +it.confidence >= DET_MIN_CONF).map(it => { const t = Date.parse(it.modelContributions?.[0]?.firstHitAt || it.timestamp); return { a: t - 3500, b: t + 1000 }; }).filter(iv => !Number.isNaN(iv.a));
+    $("live-det").innerHTML = items.length ? `<table><thead><tr><th>Escuchar</th><th>Espectrograma</th><th>Hora</th><th>Especie</th><th>Confianza</th></tr></thead><tbody>` +
+      items.map(it => `<tr><td>${playBtn(it.id, it.commonName || it.scientificName)}</td><td>${specThumb(it.id, it.commonName || it.scientificName)}</td><td class="n">${esc(it.time || "")}</td><td>${esc(it.commonName || it.scientificName)} <span class="sci">${esc(it.scientificName || "")}</span></td><td class="n">${fmt(it.confidence)}</td></tr>`).join("") + `</tbody></table>`
+      : emptyBlock("i-bird", "No hay especies detectadas recientemente.");
+  } catch (e) { /* el monitor principal ya informa si no hay conexión */ }
+}
+
+// ═════════ Arranque ═════════
+const h0 = (location.hash || "").slice(1); if (TABS.some(b => b.dataset.tab === h0)) selectTab(h0);
+load(); setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
